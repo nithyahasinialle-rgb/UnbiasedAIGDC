@@ -26,6 +26,8 @@ _jobs: dict[str, dict] = {}
 def _run_audit(job_id: str, file_bytes: bytes, target_col: str, protected_attr: str):
     """Background thread: run full audit pipeline."""
     _jobs[job_id]["status"] = "running"
+    # Save running status to Firebase immediately
+    fb.save_audit(job_id, {"job_id": job_id, "status": "running"})
     try:
         df = load_dataframe(file_bytes)
         result = train_and_evaluate(df, target_col, protected_attr)
@@ -63,6 +65,7 @@ def _run_audit(job_id: str, file_bytes: bytes, target_col: str, protected_attr: 
         logger.error(f"Audit job {job_id} failed: {exc}", exc_info=True)
         _jobs[job_id]["status"] = "error"
         _jobs[job_id]["error"] = str(exc)
+        fb.save_audit(job_id, {"job_id": job_id, "status": "error", "error": str(exc)})
 
 
 @audit_bp.post("/audit")
@@ -101,20 +104,36 @@ def start_audit():
 @audit_bp.get("/status/<job_id>")
 def get_status(job_id: str):
     job = _jobs.get(job_id)
-    if job is None:
-        try:
-            fb_job = fb.get_audit(job_id)
-            if fb_job:
-                return jsonify({"job_id": job_id, "status": fb_job.get("status", "done")})
-        except Exception:
-            pass
-        return jsonify({"error": "Job not found"}), 404
-    return jsonify({"job_id": job_id, "status": job["status"], "error": job.get("error")})
+    if job is not None:
+        return jsonify({"job_id": job_id, "status": job["status"], "error": job.get("error")})
+
+    # Not in memory - check Firebase
+    try:
+        fb_job = fb.get_audit(job_id)
+        if fb_job:
+            status = fb_job.get("status", "running")
+            if status == "done":
+                # Restore to memory for result fetch
+                _jobs[job_id] = fb_job
+            return jsonify({"job_id": job_id, "status": status})
+    except Exception as e:
+        logger.error(f"Firebase get_audit error: {e}")
+
+    return jsonify({"error": "Job not found"}), 404
 
 
 @audit_bp.get("/result/<job_id>")
 def get_result(job_id: str):
     job = _jobs.get(job_id)
+    if job is None:
+        # Try Firebase
+        try:
+            fb_job = fb.get_audit(job_id)
+            if fb_job:
+                _jobs[job_id] = fb_job
+                job = fb_job
+        except Exception:
+            pass
     if job is None:
         return jsonify({"error": "Job not found"}), 404
     if job["status"] != "done":
