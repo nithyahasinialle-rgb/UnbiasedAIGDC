@@ -23,14 +23,14 @@ def compute_shap_explanation(pipeline, X_test: pd.DataFrame, protected_attr: str
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
-        # Transform X_test through preprocessor
         preprocessor = pipeline.named_steps["preprocessor"]
         classifier = pipeline.named_steps["classifier"]
 
-        X_transformed = preprocessor.transform(X_test)
+        # Limit to 200 rows to avoid OOM crash on free tier
+        X_sample = X_test.iloc[:200] if len(X_test) > 200 else X_test
 
-        # Get feature names
-        feature_names = _get_feature_names(preprocessor, X_test)
+        X_transformed = preprocessor.transform(X_sample)
+        feature_names = _get_feature_names(preprocessor, X_sample)
 
         # Use LinearExplainer for logistic regression (faster and exact)
         explainer = shap.LinearExplainer(classifier, X_transformed, feature_perturbation="interventional")
@@ -50,12 +50,12 @@ def compute_shap_explanation(pipeline, X_test: pd.DataFrame, protected_attr: str
         # Generate bar chart
         shap_plot_b64 = _generate_shap_bar_chart(top_features)
 
-        # Per-group SHAP (if protected_attr is in X_test)
+        # Per-group SHAP (if protected_attr is in X_sample)
         group_shap = {}
-        if protected_attr in X_test.columns:
-            groups = X_test[protected_attr].astype(str).unique()
+        if protected_attr in X_sample.columns:
+            groups = X_sample[protected_attr].astype(str).unique()
             for group in groups:
-                mask = X_test[protected_attr].astype(str) == group
+                mask = X_sample[protected_attr].astype(str) == group
                 if mask.sum() < 5:
                     continue
                 group_shap_vals = np.abs(shap_values[mask]).mean(axis=0)
@@ -74,7 +74,6 @@ def compute_shap_explanation(pipeline, X_test: pd.DataFrame, protected_attr: str
 
     except Exception as exc:
         logger.error(f"SHAP computation error: {exc}")
-        # Return empty explanation
         return {
             "top_features": [],
             "shap_plot_b64": "",
