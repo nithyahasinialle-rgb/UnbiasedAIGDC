@@ -1,4 +1,6 @@
 // src/App.jsx
+import { wakeUpBackend } from './api/client'
+wakeUpBackend()
 import React from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'

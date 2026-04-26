@@ -36,6 +36,6 @@ export const generateReport = (jobId, mitigationMethod) =>
 // ---- Health ----
 export const healthCheck = () => api.get('/health')
 
-export default api
-// Wake up Render backend on app load
 export const wakeUpBackend = () => api.get('/health').catch(() => {})
+
+export default api

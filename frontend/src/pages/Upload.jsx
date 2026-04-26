@@ -20,7 +20,7 @@ function extractError(err) {
   if (err?.response?.data?.message) return err.response.data.message
   if (err?.response?.status === 404) return 'Session expired — please re-upload your file.'
   if (err?.response?.status === 400) return err.response.data ? JSON.stringify(err.response.data) : 'Bad request.'
-  if (err?.message?.includes('Network Error') || err?.code === 'ERR_NETWORK') return 'Cannot reach the backend. Is the Flask server running on port 5001?'
+  if (err?.message?.includes('Network Error') || err?.code === 'ERR_NETWORK') return `Cannot reach the backend. URL: ${err?.config?.url} - ${err?.message}`
   if (err?.code === 'ECONNABORTED') return 'Request timed out. The server may be overloaded.'
   return err?.message || 'Unexpected error.'
 }
@@ -67,25 +67,33 @@ export default function Upload() {
   }
 
   const pollForResult = (jobId) => {
-    if (intervalRef.current) clearInterval(intervalRef.current)
-    intervalRef.current = setInterval(async () => {
-      try {
-        const res = await pollStatus(jobId)
-        if (res.data.status === 'done') {
-          clearInterval(intervalRef.current); intervalRef.current = null
-          navigate(`/results/${jobId}`)
-        } else if (res.data.status === 'error') {
-          clearInterval(intervalRef.current); intervalRef.current = null
-          setError(res.data.error || 'Audit failed.')
-          setPhase('configuring')
-        }
-      } catch (err) {
+  if (intervalRef.current) clearInterval(intervalRef.current)
+  let networkRetries = 0
+  const maxRetries = 15  // wait up to ~75 seconds for backend to wake
+
+  intervalRef.current = setInterval(async () => {
+    try {
+      const res = await pollStatus(jobId)
+      networkRetries = 0  // reset on success
+      if (res.data.status === 'done') {
+        clearInterval(intervalRef.current); intervalRef.current = null
+        navigate(`/results/${jobId}`)
+      } else if (res.data.status === 'error') {
+        clearInterval(intervalRef.current); intervalRef.current = null
+        setError(res.data.error || 'Audit failed.')
+        setPhase('configuring')
+      }
+    } catch (err) {
+      networkRetries++
+      if (networkRetries >= maxRetries) {
         clearInterval(intervalRef.current); intervalRef.current = null
         setError(extractError(err))
         setPhase('configuring')
       }
-    }, 2000)
-  }
+      // else: keep polling silently
+    }
+  }, 5000)
+}
 
   const currentStep = { idle: 1, uploading: 1, configuring: 2, auditing: 3 }[phase] || 1
 
