@@ -3,7 +3,7 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: 'https://unbiasedaigdc.onrender.com/api',
   timeout: 120000,
 })
 
@@ -37,3 +37,5 @@ export const generateReport = (jobId, mitigationMethod) =>
 export const healthCheck = () => api.get('/health')
 
 export default api
+// Wake up Render backend on app load
+export const wakeUpBackend = () => api.get('/health').catch(() => {})

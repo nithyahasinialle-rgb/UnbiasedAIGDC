@@ -1,10 +1,11 @@
 """
 routes/upload.py – POST /api/upload
-Accept a CSV file, parse column info, store temporarily in memory.
+Accept a CSV file, parse column info, store to disk.
 """
 
 import uuid
 import io
+import os
 import logging
 from flask import Blueprint, request, jsonify
 import pandas as pd
@@ -14,20 +15,20 @@ from ml.pipeline import get_column_info
 logger = logging.getLogger(__name__)
 upload_bp = Blueprint("upload", __name__)
 
-# In-memory storage: file_id -> bytes
-_file_store: dict[str, bytes] = {}
+UPLOAD_DIR = "/tmp/unbiased_uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 def get_file_bytes(file_id: str) -> bytes | None:
-    return _file_store.get(file_id)
+    path = os.path.join(UPLOAD_DIR, f"{file_id}.csv")
+    if not os.path.exists(path):
+        return None
+    with open(path, "rb") as f:
+        return f.read()
 
 
 @upload_bp.post("/upload")
 def upload_csv():
-    """
-    Accepts multipart/form-data with a 'file' field (CSV).
-    Returns: { file_id, columns, n_rows, n_cols }
-    """
     if "file" not in request.files:
         return jsonify({"error": "No file part in request"}), 400
 
@@ -48,7 +49,11 @@ def upload_csv():
         return jsonify({"error": f"Failed to parse CSV: {exc}"}), 422
 
     file_id = str(uuid.uuid4())
-    _file_store[file_id] = file_bytes
+
+    # Save to disk instead of memory
+    path = os.path.join(UPLOAD_DIR, f"{file_id}.csv")
+    with open(path, "wb") as f:
+        f.write(file_bytes)
 
     col_info = get_column_info(df)
 
