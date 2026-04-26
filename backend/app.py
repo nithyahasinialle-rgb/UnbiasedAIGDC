@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 
 if os.path.exists(".env"):
     load_dotenv()
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -24,8 +23,7 @@ from routes.report import report_bp
 
 def create_app():
     app = Flask(__name__)
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
-
+    CORS(app, origins="*", supports_credentials=False)
     app.register_blueprint(upload_bp, url_prefix="/api")
     app.register_blueprint(audit_bp, url_prefix="/api")
     app.register_blueprint(mitigate_bp, url_prefix="/api")
@@ -39,8 +37,6 @@ def create_app():
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("FLASK_PORT", 5001))
+    port = int(os.getenv("PORT", 10000))
     app = create_app()
-    # use_reloader=False: Flask's reloader forks a child process with an empty
-    # in-memory store, making every uploaded file invisible to subsequent requests.
     app.run(host="0.0.0.0", port=port, debug=True, use_reloader=False)
