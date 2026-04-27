@@ -19,20 +19,19 @@ function extractError(err) {
   if (err?.response?.data?.message) return err.response.data.message
   if (err?.response?.status === 404) return 'Session expired — please re-upload your file.'
   if (err?.response?.status === 400) return err.response.data ? JSON.stringify(err.response.data) : 'Bad request.'
-  if (err?.message?.includes('Network Error') || err?.code === 'ERR_NETWORK') return 'Cannot reach the backend. Please wait 30 seconds and try again (server may be waking up).'
+  if (err?.message?.includes('Network Error') || err?.code === 'ERR_NETWORK') return 'Cannot reach the backend. Please wait 30 seconds and try again.'
   if (err?.code === 'ECONNABORTED') return 'Request timed out. The server is busy — please try again in 30 seconds.'
   return err?.message || 'Unexpected error.'
 }
 
-// Wake up backend with retries until it responds
 async function waitForBackend(onStatus) {
-  for (let i = 0; i < 20; i++) {
+  for (let i = 1; i <= 20; i++) {
     try {
       await wakeUpBackend()
-      onStatus('Backend ready!')
+      onStatus('Server is ready!')
       return true
     } catch {
-      onStatus(`Waking up server... (${i + 1}/20)`)
+      onStatus(`Waking up server... (${i}/20, ~${i * 3}s)`)
       await new Promise(r => setTimeout(r, 3000))
     }
   }
@@ -53,7 +52,6 @@ export default function Upload() {
   const intervalRef = useRef(null)
   const keepAliveRef = useRef(null)
 
-  // Wake up backend on page load
   useEffect(() => {
     wakeUpBackend().catch(() => {})
     return () => {
@@ -68,15 +66,14 @@ export default function Upload() {
     setPhase('uploading')
     setStatusMsg('Waking up server...')
 
-    // Wait for backend to be ready before uploading
     const ready = await waitForBackend(setStatusMsg)
     if (!ready) {
-      setError('Server took too long to wake up. Please try again.')
+      setError('Server took too long to wake up. Please refresh and try again.')
       setPhase('idle')
       return
     }
 
-    setStatusMsg('Uploading...')
+    setStatusMsg('Uploading file...')
     try {
       const res = await uploadCSV(f, (e) => {
         if (e.total) setUploadProgress(Math.round((e.loaded / e.total) * 100))
@@ -111,14 +108,15 @@ export default function Upload() {
     if (keepAliveRef.current) clearInterval(keepAliveRef.current)
 
     let networkRetries = 0
-    const maxRetries = 120  // 10 minutes
+    const maxRetries = 120
+    let elapsedSeconds = 0
 
-    // Keep backend alive every 20s during audit
     keepAliveRef.current = setInterval(() => {
-      fetch('https://unbiasedaigdc.onrender.com/api/health').catch(() => {})
+      wakeUpBackend().catch(() => {})
     }, 20000)
 
     intervalRef.current = setInterval(async () => {
+      elapsedSeconds += 5
       try {
         const res = await pollStatus(jobId)
         networkRetries = 0
@@ -133,12 +131,13 @@ export default function Upload() {
           setError(res.data.error || 'Audit failed.')
           setPhase('configuring')
         } else {
-          // still running/pending
-          setStatusMsg(`Audit running... (${Math.round(networkRetries * 5)}s elapsed)`)
+          const mins = Math.floor(elapsedSeconds / 60)
+          const secs = elapsedSeconds % 60
+          setStatusMsg(`Training model... ${mins}m ${secs}s elapsed`)
         }
       } catch (err) {
         networkRetries++
-        setStatusMsg(`Waiting for server response... (attempt ${networkRetries}/${maxRetries})`)
+        setStatusMsg(`Waiting for server... (retry ${networkRetries}/${maxRetries})`)
         if (networkRetries >= maxRetries) {
           clearInterval(intervalRef.current); intervalRef.current = null
           clearInterval(keepAliveRef.current); keepAliveRef.current = null

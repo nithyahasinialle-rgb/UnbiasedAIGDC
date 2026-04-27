@@ -19,12 +19,10 @@ import firebase_client as fb
 logger = logging.getLogger(__name__)
 audit_bp = Blueprint("audit", __name__)
 
-# In-memory job store
 _jobs: dict[str, dict] = {}
 
 
 def _run_audit(job_id: str, file_bytes: bytes, target_col: str, protected_attr: str):
-    """Background thread: run full audit pipeline."""
     _jobs[job_id]["status"] = "running"
     fb.save_audit(job_id, {"job_id": job_id, "status": "running"})
     try:
@@ -112,7 +110,6 @@ def get_status(job_id: str):
     if job is not None:
         return jsonify({"job_id": job_id, "status": job["status"], "error": job.get("error")})
 
-    # Not in memory - check Firebase
     try:
         fb_job = fb.get_audit(job_id)
         if fb_job:
@@ -146,5 +143,4 @@ def get_result(job_id: str):
 
 
 def get_job(job_id: str) -> dict | None:
-    """Used by other routes to access job data."""
     return _jobs.get(job_id)
