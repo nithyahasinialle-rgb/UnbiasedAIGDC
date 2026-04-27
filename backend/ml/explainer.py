@@ -1,5 +1,5 @@
 """
-ml/explainer.py – SHAP-based model explainability
+ml/explainer.py – SHAP-based model explainability (memory-safe version)
 """
 
 import io
@@ -7,16 +7,12 @@ import base64
 import logging
 import numpy as np
 import pandas as pd
+import gc
 
 logger = logging.getLogger(__name__)
 
 
 def compute_shap_explanation(pipeline, X_test: pd.DataFrame, protected_attr: str) -> dict:
-    """
-    Compute SHAP values and return:
-    - top_features: list of {feature, importance} sorted by mean |SHAP|
-    - shap_plot_b64: base64-encoded PNG of a summary bar chart
-    """
     try:
         import shap
         import matplotlib
@@ -26,45 +22,71 @@ def compute_shap_explanation(pipeline, X_test: pd.DataFrame, protected_attr: str
         preprocessor = pipeline.named_steps["preprocessor"]
         classifier = pipeline.named_steps["classifier"]
 
-        # Limit to 200 rows to avoid OOM crash on free tier
-        X_sample = X_test.iloc[:200] if len(X_test) > 200 else X_test
+        # 🔥 CRITICAL: reduce SHAP load drastically
+        sample_size = min(len(X_test), 50)
+        X_sample = X_test.sample(n=sample_size, random_state=42)
 
+        # Transform data
         X_transformed = preprocessor.transform(X_sample)
+
+        # 🔥 Reduce memory footprint
+        if isinstance(X_transformed, np.ndarray):
+            X_transformed = X_transformed.astype(np.float32)
+
         feature_names = _get_feature_names(preprocessor, X_sample)
 
-        # Use LinearExplainer for logistic regression (faster and exact)
-        explainer = shap.LinearExplainer(classifier, X_transformed, feature_perturbation="interventional")
+        # Use LinearExplainer (fastest for logistic regression)
+        explainer = shap.LinearExplainer(
+            classifier,
+            X_transformed,
+            feature_perturbation="interventional"
+        )
+
         shap_values = explainer.shap_values(X_transformed)
 
-        # Mean absolute SHAP per feature
+        # 🔥 Handle binary/multiclass outputs safely
+        if isinstance(shap_values, list):
+            shap_values = shap_values[0]
+
         mean_abs_shap = np.abs(shap_values).mean(axis=0)
 
-        # Build feature importance list
         feature_importance = [
             {"feature": str(name), "importance": float(val)}
             for name, val in zip(feature_names, mean_abs_shap)
         ]
+
         feature_importance.sort(key=lambda x: x["importance"], reverse=True)
         top_features = feature_importance[:15]
 
-        # Generate bar chart
         shap_plot_b64 = _generate_shap_bar_chart(top_features)
 
-        # Per-group SHAP (if protected_attr is in X_sample)
+        # 🔥 Group-wise SHAP (lightweight)
         group_shap = {}
         if protected_attr in X_sample.columns:
             groups = X_sample[protected_attr].astype(str).unique()
+
             for group in groups:
                 mask = X_sample[protected_attr].astype(str) == group
+
                 if mask.sum() < 5:
                     continue
-                group_shap_vals = np.abs(shap_values[mask]).mean(axis=0)
+
+                group_vals = np.abs(shap_values[mask]).mean(axis=0)
+
                 group_top = sorted(
-                    [{"feature": str(n), "importance": float(v)} for n, v in zip(feature_names, group_shap_vals)],
+                    [
+                        {"feature": str(n), "importance": float(v)}
+                        for n, v in zip(feature_names, group_vals)
+                    ],
                     key=lambda x: x["importance"],
                     reverse=True
                 )[:10]
+
                 group_shap[group] = group_top
+
+        # 🔥 Free memory aggressively
+        del shap_values, X_transformed, explainer
+        gc.collect()
 
         return {
             "top_features": top_features,
@@ -73,7 +95,7 @@ def compute_shap_explanation(pipeline, X_test: pd.DataFrame, protected_attr: str
         }
 
     except Exception as exc:
-        logger.error(f"SHAP computation error: {exc}")
+        logger.error(f"SHAP computation error: {exc}", exc_info=True)
         return {
             "top_features": [],
             "shap_plot_b64": "",
@@ -83,11 +105,12 @@ def compute_shap_explanation(pipeline, X_test: pd.DataFrame, protected_attr: str
 
 
 def _get_feature_names(preprocessor, X: pd.DataFrame) -> list:
-    """Extract feature names from a fitted ColumnTransformer."""
     names = []
+
     for name, transformer, cols in preprocessor.transformers_:
         if name == "num":
             names.extend(cols)
+
         elif name == "cat":
             try:
                 encoder = transformer.named_steps["encoder"]
@@ -95,13 +118,14 @@ def _get_feature_names(preprocessor, X: pd.DataFrame) -> list:
                 names.extend(cat_names)
             except Exception:
                 names.extend(cols)
+
     if not names:
         names = [f"feature_{i}" for i in range(preprocessor.transform(X).shape[1])]
+
     return names
 
 
 def _generate_shap_bar_chart(top_features: list) -> str:
-    """Generate a horizontal bar chart of SHAP importances and return as base64 PNG."""
     try:
         import matplotlib
         matplotlib.use("Agg")
@@ -113,22 +137,28 @@ def _generate_shap_bar_chart(top_features: list) -> str:
         fig, ax = plt.subplots(figsize=(10, 6), facecolor="#0f0f23")
         ax.set_facecolor("#0f0f23")
 
-        colors = ["#7c3aed" if i < len(features) // 2 else "#a855f7" for i in range(len(features))]
-        bars = ax.barh(features, importances, color=colors, height=0.6, edgecolor="none")
+        colors = [
+            "#7c3aed" if i < len(features) // 2 else "#a855f7"
+            for i in range(len(features))
+        ]
+
+        ax.barh(features, importances, color=colors, height=0.6)
 
         ax.set_xlabel("Mean |SHAP Value|", color="#e2e8f0", fontsize=11)
         ax.set_title("Feature Importance (SHAP)", color="#f8fafc", fontsize=13, fontweight="bold", pad=12)
+
         ax.tick_params(colors="#cbd5e1")
+
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.spines["left"].set_color("#334155")
         ax.spines["bottom"].set_color("#334155")
-        ax.xaxis.label.set_color("#94a3b8")
 
         buf = io.BytesIO()
         plt.tight_layout()
         plt.savefig(buf, format="png", dpi=120, bbox_inches="tight", facecolor="#0f0f23")
         plt.close(fig)
+
         buf.seek(0)
         return base64.b64encode(buf.read()).decode("utf-8")
 

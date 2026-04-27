@@ -17,7 +17,12 @@ from sklearn.metrics import accuracy_score
 
 def load_dataframe(file_bytes: bytes) -> pd.DataFrame:
     """Load CSV from bytes."""
-    return pd.read_csv(io.BytesIO(file_bytes))
+    df = pd.read_csv(io.BytesIO(file_bytes))
+
+    # 🔥 Drop completely empty columns (fixes your warning + saves memory)
+    df = df.dropna(axis=1, how="all")
+
+    return df
 
 
 def get_column_info(df: pd.DataFrame) -> dict:
@@ -42,7 +47,12 @@ def build_pipeline(X_train: pd.DataFrame) -> Pipeline:
 
     categorical_transformer = Pipeline([
         ("imputer", SimpleImputer(strategy="most_frequent")),
-        ("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+        # 🔥 Limit category explosion (VERY important for memory)
+        ("encoder", OneHotEncoder(
+            handle_unknown="ignore",
+            sparse_output=False,
+            max_categories=10
+        )),
     ])
 
     transformers = []
@@ -56,7 +66,7 @@ def build_pipeline(X_train: pd.DataFrame) -> Pipeline:
     pipeline = Pipeline([
         ("preprocessor", preprocessor),
         ("classifier", LogisticRegression(
-            max_iter=500,
+            max_iter=300,
             random_state=42,
             solver="saga",
             n_jobs=1,
@@ -77,6 +87,7 @@ def prepare_data(df: pd.DataFrame, target_col: str, protected_attr: str):
         raise ValueError(f"Protected attribute '{protected_attr}' not found in dataset.")
 
     y = df[target_col].copy()
+
     if y.dtype == object or str(y.dtype) == "bool":
         unique_vals = y.unique()
         if len(unique_vals) != 2:
@@ -91,7 +102,10 @@ def prepare_data(df: pd.DataFrame, target_col: str, protected_attr: str):
     sensitive = df[protected_attr].copy().astype(str)
 
     X_train, X_test, y_train, y_test, s_train, s_test = train_test_split(
-        X, y, sensitive, test_size=0.25, random_state=42, stratify=y
+        X, y, sensitive,
+        test_size=0.25,
+        random_state=42,
+        stratify=y
     )
 
     return X_train, X_test, y_train, y_test, s_train, s_test
@@ -100,23 +114,25 @@ def prepare_data(df: pd.DataFrame, target_col: str, protected_attr: str):
 def train_and_evaluate(df: pd.DataFrame, target_col: str, protected_attr: str) -> dict:
     """
     Full training and evaluation pipeline.
-    Returns a dict with accuracy, y_pred, y_test, s_test, pipeline, X_test.
+    Returns model + evaluation artifacts.
     """
-    # Limit dataset to 3000 rows to stay within free tier memory
-    if len(df) > 3000:
-        df = df.sample(n=3000, random_state=42).reset_index(drop=True)
+
+    # 🔥 HARD LIMIT dataset size (prevents SIGKILL)
+    if len(df) > 800:
+        df = df.sample(n=800, random_state=42).reset_index(drop=True)
 
     X_train, X_test, y_train, y_test, s_train, s_test = prepare_data(
         df, target_col, protected_attr
     )
 
     pipeline = build_pipeline(X_train)
+
     pipeline.fit(X_train, y_train)
 
     y_pred = pipeline.predict(X_test)
     accuracy = float(accuracy_score(y_test, y_pred))
 
-    # Free memory
+    # 🔥 Free memory (small but useful)
     gc.collect()
 
     return {
