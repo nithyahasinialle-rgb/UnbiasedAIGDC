@@ -26,19 +26,24 @@ _jobs: dict[str, dict] = {}
 def _run_audit(job_id: str, file_bytes: bytes, target_col: str, protected_attr: str):
     """Background thread: run full audit pipeline."""
     _jobs[job_id]["status"] = "running"
-    # Save running status to Firebase immediately
     fb.save_audit(job_id, {"job_id": job_id, "status": "running"})
     try:
+        logger.info(f"[{job_id}] Starting audit...")
         df = load_dataframe(file_bytes)
+        logger.info(f"[{job_id}] Loaded dataframe: {df.shape}")
+
         result = train_and_evaluate(df, target_col, protected_attr)
+        logger.info(f"[{job_id}] Training done. Accuracy: {result['accuracy']}")
 
         fairness = compute_fairness_metrics(
             result["y_test"], result["y_pred"], result["s_test"]
         )
+        logger.info(f"[{job_id}] Fairness metrics done.")
 
         shap_data = compute_shap_explanation(
             result["pipeline"], result["X_test"], protected_attr
         )
+        logger.info(f"[{job_id}] SHAP done.")
 
         payload = {
             "status": "done",
@@ -57,12 +62,12 @@ def _run_audit(job_id: str, file_bytes: bytes, target_col: str, protected_attr: 
         }
 
         _jobs[job_id].update(payload)
-
         lightweight = {k: v for k, v in payload.items() if not k.startswith("_")}
         fb.save_audit(job_id, {"job_id": job_id, **lightweight})
+        logger.info(f"[{job_id}] Audit complete and saved to Firebase.")
 
     except Exception as exc:
-        logger.error(f"Audit job {job_id} failed: {exc}", exc_info=True)
+        logger.error(f"[{job_id}] Audit failed: {exc}", exc_info=True)
         _jobs[job_id]["status"] = "error"
         _jobs[job_id]["error"] = str(exc)
         fb.save_audit(job_id, {"job_id": job_id, "status": "error", "error": str(exc)})
@@ -113,7 +118,6 @@ def get_status(job_id: str):
         if fb_job:
             status = fb_job.get("status", "running")
             if status == "done":
-                # Restore to memory for result fetch
                 _jobs[job_id] = fb_job
             return jsonify({"job_id": job_id, "status": status})
     except Exception as e:
@@ -126,7 +130,6 @@ def get_status(job_id: str):
 def get_result(job_id: str):
     job = _jobs.get(job_id)
     if job is None:
-        # Try Firebase
         try:
             fb_job = fb.get_audit(job_id)
             if fb_job:
