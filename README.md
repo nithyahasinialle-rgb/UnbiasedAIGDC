@@ -155,20 +155,20 @@ The project supports two mitigation approaches:
 
 ### Setup
 ### Backend:
-cd backend
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
+- cd backend
+- python -m venv venv
+- venv\Scripts\activate
+- pip install -r requirements.txt
 ### Create .env file:
-GEMINI_API_KEY=your_key_here
-FIREBASE_PROJECT_ID=solutionchallenge-27bf1
-FIREBASE_STORAGE_BUCKET=solutionchallenge-27bf1.firebasestorage.app
-FLASK_PORT=5001
+- GEMINI_API_KEY=your_key_here
+- FIREBASE_PROJECT_ID=solutionchallenge-27bf1
+- FIREBASE_STORAGE_BUCKET=solutionchallenge-27bf1.firebasestorage.app
+- FLASK_PORT=5001
 
 ### Frontend
-cd frontend
-npm install
-### Run the App
+- cd frontend
+- npm install
+### Run the App:
 
 ### Backend:
 
