@@ -1,194 +1,209 @@
-Unbiased – AI Decision Audit Tool
+# Unbiased – AI Decision Audit Tool
 
 Unbiased is a platform that helps identify and reduce bias in machine learning models. It allows users to upload a dataset, train a model, check if the model treats different groups fairly, understand why decisions are made, and apply methods to improve fairness.
 
-The aim of this project is simple:
-make fairness in AI understandable and actionable, not just theoretical.
+The aim of this project is simple: **make fairness in AI understandable and actionable, not just theoretical.**
 
-Live Demo
+---
+
+## Live Demo
 
 You can try the application here:
 
-https://solutionchallenge-27bf1.web.app/
+🔗 https://solutionchallenge-27bf1.web.app/
 
 The demo allows you to:
+- Upload a dataset  
+- Run a fairness audit  
+- View explanations  
+- Apply mitigation techniques  
 
-Upload a dataset
-Run a fairness audit
-View explanations
-Apply mitigation techniques
+**Note:** For smooth performance on the hosted version, datasets of up to ~2000 rows are recommended.
 
-Note: For smooth performance on the hosted version, datasets of up to ~2000 rows are recommended. (Threshold Optimization)
+---
 
-Why This Project?
+## Why This Project?
 
 Machine learning models are widely used in decisions like hiring, lending, and risk assessment. However, these models can unintentionally learn biases from data.
 
 Common problems include:
-
-Certain groups receiving unfair outcomes
-Lack of transparency in how decisions are made
-Difficulty in correcting biased predictions
+- Certain groups receiving unfair outcomes  
+- Lack of transparency in how decisions are made  
+- Difficulty in correcting biased predictions  
 
 Unbiased was built to address these issues in a single, easy-to-use system.
 
-Design Approach:
+---
 
-The project was developed with a focus on real user needs:
+## Design Approach
 
-Understanding the Problem
+This project follows a user-centered design process:
 
-Many existing tools are either too technical or require combining multiple libraries. This makes fairness analysis difficult for most users.
+### Empathize  
+Many existing fairness tools are either too technical or fragmented. Developers often rely on multiple tools, while others struggle to interpret results.
 
-Defining the Goal
+### Define  
+The problem was framed as:  
+**How can bias in machine learning be detected, explained, and improved in a simple and practical way?**
 
-Create a system that can:
+### Ideate  
+Different approaches were explored, and the final system integrates fairness evaluation, explainability, and mitigation into one workflow.
 
-Detect bias
-Explain model behavior
-Suggest and apply improvements
-Building the Solution
+### Prototype  
+A working system was built using:
+- Flask backend for ML processing  
+- React frontend for interaction  
 
-Instead of separate tools, everything was combined into one workflow:
+Workflow:
+**Upload → Audit → Explain → Mitigate → Review**
 
-Upload → Audit → Explain → Mitigate → Review Results
+### Test & Iterate  
+The system was tested across datasets and environments. Improvements were made for:
+- Performance  
+- Stability  
+- Clearer output presentation  
 
-Improving Through Testing
+---
 
-The system was tested with different datasets and deployment setups. Adjustments were made to:
+## What the Platform Does
 
-Improve performance
-Reduce resource usage
-Present results clearly
-What the Platform Does
-1. Bias Detection
+### 1. Bias Detection  
+Measures fairness across groups using:
+- Demographic Parity Difference and Ratio  
+- Equalized Odds Difference  
+- Group-wise selection rates  
 
-The system checks whether different groups (for example, based on gender or category) are treated equally.
+---
 
-It measures:
+### 2. Explainability  
+Shows why the model makes decisions:
+- SHAP-based feature importance  
+- Feature-level insights  
 
-Demographic Parity (are outcomes similar across groups?)
-Equalized Odds (are errors similar across groups?)
-Selection rates for each group
-2. Explainability
+---
 
-The platform shows why the model is making certain decisions.
+### 3. Bias Mitigation  
+Applies techniques to reduce bias:
+- **Threshold Optimizer** (used in deployed version)  
+- **Exponentiated Gradient** (for local execution)  
 
-Uses SHAP values
-Highlights which features influence predictions the most
-3. Bias Mitigation
+---
 
-If bias is detected, the system can try to reduce it.
+### 4. Reporting  
+Provides summaries of:
+- Model performance  
+- Fairness metrics  
+- Improvements after mitigation  
 
-Threshold Optimizer (used in deployed version)
-Exponentiated Gradient (available for local execution)
-4. Reporting
+---
 
-The system provides clear summaries of:
-
-Model performance
-Fairness metrics
-Improvements after mitigation
-Important Note on Mitigation Methods
+## Important Note on Mitigation Methods
 
 The project supports two mitigation approaches:
 
-Threshold Optimizer
-Fast and lightweight
-Used in the deployed version
-Exponentiated Gradient
-More advanced and computationally intensive
-Works best when running locally
-May fail on hosted backend due to memory and time limits
+- **Threshold Optimizer**
+  - Fast and lightweight  
+  - Used in the deployed version  
 
-This design ensures that the deployed system remains stable while still supporting advanced methods offline.
+- **Exponentiated Gradient**
+  - More computationally intensive  
+  - Recommended for local execution  
+  - May fail on hosted backend (Railway) due to memory and time limits  
 
-How It Works (Simple Flow)
-Upload a dataset
-The system trains a model
-It checks fairness across groups
-It explains model decisions
-It applies mitigation (if needed)
-Results are updated and displayed
-Tech Stack
+---
 
-Frontend (Used Firebase Hosting)
+## How It Works
 
-React (Vite)
-Tailwind CSS
-Recharts
-Framer Motion
+1. Upload a dataset  
+2. Train a model  
+3. Evaluate fairness  
+4. Generate explanations  
+5. Apply mitigation  
+6. Review updated results  
 
-Backend (Used Railway to deploy)
+---
 
-Flask (Python)
-Scikit-learn
-Fairlearn
-SHAP
+## Tech Stack
 
-AI Integration
+**Frontend**
+- React (Vite)  
+- Tailwind CSS  
+- Recharts  
+- Framer Motion  
 
-Google Gemini API (for report generation)
+**Backend**
+- Flask (Python)  
+- Scikit-learn  
+- Fairlearn  
+- SHAP  
 
-Storage
+**AI Integration**
+- Google Gemini API (for report generation)  
 
-Firebase Firestore and Storage
-Running the Project Locally
-Requirements
-Python 3.9+
-Node.js 18+
-Setup
+**Storage**
+- Firebase Firestore and Storage  
 
-Clone the repository:
+---
 
-git clone <repository-url>
-cd GoogleSolutionChallenge
-Backend
+## Running the Project Locally
+
+### Requirements
+- Python 3.9+  
+- Node.js 18+  
+
+---
+
+### Setup
+### Backend:
 cd backend
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
-
-Create a .env file:
-
+### Create .env file:
 GEMINI_API_KEY=your_key_here
 FIREBASE_PROJECT_ID=solutionchallenge-27bf1
 FIREBASE_STORAGE_BUCKET=solutionchallenge-27bf1.firebasestorage.app
 FLASK_PORT=5001
-Frontend
+
+### Frontend
 cd frontend
 npm install
-Run the App
+### Run the App
 
-Backend:
+### Backend:
 
 python app.py
 
-Frontend:
+### Frontend:
 
 npm run dev
 
-Open:
+### Open:
 http://localhost:5173
-
-Project Structure
+### Project Structure
 backend/
-  ├── routes/        # API endpoints
-  ├── ml/            # ML pipeline, fairness, explainability
+  ├── routes/
+  ├── ml/
   ├── firebase_client.py
 
 frontend/
   ├── src/components/
   ├── src/pages/
-Deployment Notes
+
+## Deployment Notes
 The deployed version is optimized for performance and stability
-Dataset size is limited to ensure smooth execution
-Threshold Optimizer is used for mitigation in production
+Dataset size is limited for smooth execution
+Threshold Optimizer is used in production
 Exponentiated Gradient is recommended for local use
-License
+### License
 
 This project is licensed under the MIT License.
 
-Final Note: Unbiased is designed to bridge the gap between fairness theory and practical implementation. It focuses on clarity, usability, and real-world constraints, making it easier to understand and improve the behavior of machine learning models.
+### Final Note
 
-Unbiased is designed to bridge the gap between fairness theory and practical implementation. It focuses on clarity, usability, and real-world constraints, making it easier to understand and improve the behavior of machine learning models.
+Unbiased focuses on making fairness in machine learning understandable and usable in real-world scenarios. It combines analysis, explanation, and improvement into a single system that is both practical and accessible.
+
+
+```bash
+git clone <repository-url>
+cd GoogleSolutionChallenge
