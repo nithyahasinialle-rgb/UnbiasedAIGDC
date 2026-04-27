@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import UploadZone from '../components/UploadZone'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { uploadCSV, startAudit, pollStatus } from '../api/client'
+import { uploadCSV, startAudit, pollStatus, wakeUpBackend } from '../api/client'
 
 const Step = ({ n, label, active, done }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -14,15 +14,29 @@ const Step = ({ n, label, active, done }) => (
   </div>
 )
 
-// Extract the most useful error message from an axios error
 function extractError(err) {
   if (err?.response?.data?.error) return err.response.data.error
   if (err?.response?.data?.message) return err.response.data.message
   if (err?.response?.status === 404) return 'Session expired — please re-upload your file.'
   if (err?.response?.status === 400) return err.response.data ? JSON.stringify(err.response.data) : 'Bad request.'
-  if (err?.message?.includes('Network Error') || err?.code === 'ERR_NETWORK') return `Cannot reach the backend. URL: ${err?.config?.url} - ${err?.message}`
-  if (err?.code === 'ECONNABORTED') return 'Request timed out. The server may be overloaded.'
+  if (err?.message?.includes('Network Error') || err?.code === 'ERR_NETWORK') return 'Cannot reach the backend. Please wait 30 seconds and try again (server may be waking up).'
+  if (err?.code === 'ECONNABORTED') return 'Request timed out. The server is busy — please try again in 30 seconds.'
   return err?.message || 'Unexpected error.'
+}
+
+// Wake up backend with retries until it responds
+async function waitForBackend(onStatus) {
+  for (let i = 0; i < 20; i++) {
+    try {
+      await wakeUpBackend()
+      onStatus('Backend ready!')
+      return true
+    } catch {
+      onStatus(`Waking up server... (${i + 1}/20)`)
+      await new Promise(r => setTimeout(r, 3000))
+    }
+  }
+  return false
 }
 
 export default function Upload() {
@@ -35,12 +49,34 @@ export default function Upload() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [phase, setPhase] = useState('idle')
   const [error, setError] = useState('')
+  const [statusMsg, setStatusMsg] = useState('')
   const intervalRef = useRef(null)
+  const keepAliveRef = useRef(null)
 
-  useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current) }, [])
+  // Wake up backend on page load
+  useEffect(() => {
+    wakeUpBackend().catch(() => {})
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+      if (keepAliveRef.current) clearInterval(keepAliveRef.current)
+    }
+  }, [])
 
   const handleFile = useCallback(async (f) => {
-    setFile(f); setError(''); setPhase('uploading')
+    setFile(f)
+    setError('')
+    setPhase('uploading')
+    setStatusMsg('Waking up server...')
+
+    // Wait for backend to be ready before uploading
+    const ready = await waitForBackend(setStatusMsg)
+    if (!ready) {
+      setError('Server took too long to wake up. Please try again.')
+      setPhase('idle')
+      return
+    }
+
+    setStatusMsg('Uploading...')
     try {
       const res = await uploadCSV(f, (e) => {
         if (e.total) setUploadProgress(Math.round((e.loaded / e.total) * 100))
@@ -48,6 +84,7 @@ export default function Upload() {
       setFileId(res.data.file_id)
       setColumns(res.data.columns || [])
       setPhase('configuring')
+      setStatusMsg('')
     } catch (err) {
       setError(extractError(err))
       setPhase('idle')
@@ -56,7 +93,10 @@ export default function Upload() {
 
   const handleStartAudit = async () => {
     if (!targetCol || !protectedAttr) return
-    setError(''); setPhase('auditing')
+    setError('')
+    setPhase('auditing')
+    setStatusMsg('Starting audit...')
+
     try {
       const res = await startAudit(fileId, targetCol, protectedAttr)
       pollForResult(res.data.job_id)
@@ -67,33 +107,47 @@ export default function Upload() {
   }
 
   const pollForResult = (jobId) => {
-  if (intervalRef.current) clearInterval(intervalRef.current)
-  let networkRetries = 0
-  const maxRetries = 120  // wait up to 10min for backend to wake
+    if (intervalRef.current) clearInterval(intervalRef.current)
+    if (keepAliveRef.current) clearInterval(keepAliveRef.current)
 
-  intervalRef.current = setInterval(async () => {
-    try {
-      const res = await pollStatus(jobId)
-      networkRetries = 0  // reset on success
-      if (res.data.status === 'done') {
-        clearInterval(intervalRef.current); intervalRef.current = null
-        navigate(`/results/${jobId}`)
-      } else if (res.data.status === 'error') {
-        clearInterval(intervalRef.current); intervalRef.current = null
-        setError(res.data.error || 'Audit failed.')
-        setPhase('configuring')
+    let networkRetries = 0
+    const maxRetries = 120  // 10 minutes
+
+    // Keep backend alive every 20s during audit
+    keepAliveRef.current = setInterval(() => {
+      fetch('https://unbiasedaigdc.onrender.com/api/health').catch(() => {})
+    }, 20000)
+
+    intervalRef.current = setInterval(async () => {
+      try {
+        const res = await pollStatus(jobId)
+        networkRetries = 0
+
+        if (res.data.status === 'done') {
+          clearInterval(intervalRef.current); intervalRef.current = null
+          clearInterval(keepAliveRef.current); keepAliveRef.current = null
+          navigate(`/results/${jobId}`)
+        } else if (res.data.status === 'error') {
+          clearInterval(intervalRef.current); intervalRef.current = null
+          clearInterval(keepAliveRef.current); keepAliveRef.current = null
+          setError(res.data.error || 'Audit failed.')
+          setPhase('configuring')
+        } else {
+          // still running/pending
+          setStatusMsg(`Audit running... (${Math.round(networkRetries * 5)}s elapsed)`)
+        }
+      } catch (err) {
+        networkRetries++
+        setStatusMsg(`Waiting for server response... (attempt ${networkRetries}/${maxRetries})`)
+        if (networkRetries >= maxRetries) {
+          clearInterval(intervalRef.current); intervalRef.current = null
+          clearInterval(keepAliveRef.current); keepAliveRef.current = null
+          setError(extractError(err))
+          setPhase('configuring')
+        }
       }
-    } catch (err) {
-      networkRetries++
-      if (networkRetries >= maxRetries) {
-        clearInterval(intervalRef.current); intervalRef.current = null
-        setError(extractError(err))
-        setPhase('configuring')
-      }
-      // else: keep polling silently
-    }
-  }, 5000)
-}
+    }, 5000)
+  }
 
   const currentStep = { idle: 1, uploading: 1, configuring: 2, auditing: 3 }[phase] || 1
 
@@ -122,7 +176,9 @@ export default function Upload() {
 
         {phase === 'uploading' && (
           <div className="card" style={{ padding: 32 }}>
-            <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Uploading {file?.name}…</p>
+            <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>
+              {statusMsg || `Uploading ${file?.name}…`}
+            </p>
             <div className="progress-bar">
               <div className="progress-fill" style={{ width: `${uploadProgress}%` }} />
             </div>
@@ -173,7 +229,10 @@ export default function Upload() {
 
         {phase === 'auditing' && (
           <div className="card">
-            <LoadingSpinner message="Running Audit…" subMessage="Training model and computing fairness metrics" />
+            <LoadingSpinner
+              message="Running Audit…"
+              subMessage={statusMsg || 'Training model and computing fairness metrics'}
+            />
           </div>
         )}
       </div>
