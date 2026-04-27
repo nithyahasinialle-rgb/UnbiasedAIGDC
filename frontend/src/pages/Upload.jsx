@@ -69,7 +69,7 @@ export default function Upload() {
   const pollForResult = (jobId) => {
   if (intervalRef.current) clearInterval(intervalRef.current)
   let networkRetries = 0
-  const maxRetries = 15  // wait up to ~75 seconds for backend to wake
+  const maxRetries = 120  // wait up to 10min for backend to wake
 
   intervalRef.current = setInterval(async () => {
     try {

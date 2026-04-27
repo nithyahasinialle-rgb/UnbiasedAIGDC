@@ -3,6 +3,7 @@ ml/pipeline.py – Core ML preprocessing, training, and evaluation pipeline
 """
 
 import io
+import gc
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -11,7 +12,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import accuracy_score
 
 
 def load_dataframe(file_bytes: bytes) -> pd.DataFrame:
@@ -54,7 +55,12 @@ def build_pipeline(X_train: pd.DataFrame) -> Pipeline:
 
     pipeline = Pipeline([
         ("preprocessor", preprocessor),
-        ("classifier", LogisticRegression(max_iter=1000, random_state=42)),
+        ("classifier", LogisticRegression(
+            max_iter=500,
+            random_state=42,
+            solver="saga",
+            n_jobs=1,
+        )),
     ])
 
     return pipeline
@@ -70,19 +76,16 @@ def prepare_data(df: pd.DataFrame, target_col: str, protected_attr: str):
     if protected_attr not in df.columns:
         raise ValueError(f"Protected attribute '{protected_attr}' not found in dataset.")
 
-    # Encode target to 0/1 if not already
     y = df[target_col].copy()
     if y.dtype == object or str(y.dtype) == "bool":
         unique_vals = y.unique()
         if len(unique_vals) != 2:
             raise ValueError(f"Target column must be binary but has {len(unique_vals)} unique values.")
-        # Encode: map larger/truthy value to 1
         positive_label = sorted(unique_vals)[-1]
         y = (y == positive_label).astype(int)
     else:
         y = y.astype(int)
 
-    # Features (drop target; keep protected attribute for fairness analysis)
     feature_cols = [c for c in df.columns if c != target_col]
     X = df[feature_cols].copy()
     sensitive = df[protected_attr].copy().astype(str)
@@ -99,6 +102,10 @@ def train_and_evaluate(df: pd.DataFrame, target_col: str, protected_attr: str) -
     Full training and evaluation pipeline.
     Returns a dict with accuracy, y_pred, y_test, s_test, pipeline, X_test.
     """
+    # Limit dataset to 3000 rows to stay within free tier memory
+    if len(df) > 3000:
+        df = df.sample(n=3000, random_state=42).reset_index(drop=True)
+
     X_train, X_test, y_train, y_test, s_train, s_test = prepare_data(
         df, target_col, protected_attr
     )
@@ -108,6 +115,9 @@ def train_and_evaluate(df: pd.DataFrame, target_col: str, protected_attr: str) -
 
     y_pred = pipeline.predict(X_test)
     accuracy = float(accuracy_score(y_test, y_pred))
+
+    # Free memory
+    gc.collect()
 
     return {
         "pipeline": pipeline,
