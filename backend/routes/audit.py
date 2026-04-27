@@ -19,18 +19,26 @@ import firebase_client as fb
 logger = logging.getLogger(__name__)
 audit_bp = Blueprint("audit", __name__)
 
+# 🔥 In-memory job store (THIS is your real data source)
 _jobs: dict[str, dict] = {}
 
 
 def _run_audit(job_id: str, file_bytes: bytes, target_col: str, protected_attr: str):
     _jobs[job_id]["status"] = "running"
     fb.save_audit(job_id, {"job_id": job_id, "status": "running"})
+
     try:
         logger.info(f"[{job_id}] Starting audit...")
+
         df = load_dataframe(file_bytes)
         logger.info(f"[{job_id}] Loaded dataframe: {df.shape}")
 
         result = train_and_evaluate(df, target_col, protected_attr)
+
+        # sanity check (prevents silent failure later)
+        if result.get("pipeline") is None:
+            raise Exception("Pipeline not created")
+
         logger.info(f"[{job_id}] Training done. Accuracy: {result['accuracy']}")
 
         fairness = compute_fairness_metrics(
@@ -48,8 +56,12 @@ def _run_audit(job_id: str, file_bytes: bytes, target_col: str, protected_attr: 
             "accuracy": result["accuracy"],
             "target_col": target_col,
             "protected_attr": protected_attr,
+
+            # fairness + explainability
             **fairness,
             **shap_data,
+
+            # 🔥 ML artifacts (ONLY in memory, NEVER Firebase)
             "_pipeline": result["pipeline"],
             "_X_train": result["X_train"],
             "_y_train": result["y_train"],
@@ -59,16 +71,25 @@ def _run_audit(job_id: str, file_bytes: bytes, target_col: str, protected_attr: 
             "_s_test": result["s_test"],
         }
 
+        # store full job in memory
         _jobs[job_id].update(payload)
+
+        # store lightweight version in Firebase
         lightweight = {k: v for k, v in payload.items() if not k.startswith("_")}
         fb.save_audit(job_id, {"job_id": job_id, **lightweight})
-        logger.info(f"[{job_id}] Audit complete and saved to Firebase.")
+
+        logger.info(f"[{job_id}] Audit complete and saved.")
 
     except Exception as exc:
         logger.error(f"[{job_id}] Audit failed: {exc}", exc_info=True)
         _jobs[job_id]["status"] = "error"
         _jobs[job_id]["error"] = str(exc)
-        fb.save_audit(job_id, {"job_id": job_id, "status": "error", "error": str(exc)})
+
+        fb.save_audit(job_id, {
+            "job_id": job_id,
+            "status": "error",
+            "error": str(exc)
+        })
 
 
 @audit_bp.post("/audit")
@@ -86,6 +107,7 @@ def start_audit():
         return jsonify({"error": f"file_id '{file_id}' not found. Please upload first."}), 404
 
     job_id = str(uuid.uuid4())
+
     _jobs[job_id] = {
         "status": "pending",
         "job_id": job_id,
@@ -107,16 +129,23 @@ def start_audit():
 @audit_bp.get("/status/<job_id>")
 def get_status(job_id: str):
     job = _jobs.get(job_id)
-    if job is not None:
-        return jsonify({"job_id": job_id, "status": job["status"], "error": job.get("error")})
 
+    # ✅ If job exists in memory → trust it
+    if job is not None:
+        return jsonify({
+            "job_id": job_id,
+            "status": job["status"],
+            "error": job.get("error")
+        })
+
+    # 🔁 fallback to Firebase (ONLY metadata)
     try:
         fb_job = fb.get_audit(job_id)
         if fb_job:
-            status = fb_job.get("status", "running")
-            if status == "done":
-                _jobs[job_id] = fb_job
-            return jsonify({"job_id": job_id, "status": status})
+            return jsonify({
+                "job_id": job_id,
+                "status": fb_job.get("status", "running")
+            })
     except Exception as e:
         logger.error(f"Firebase get_audit error: {e}")
 
@@ -126,21 +155,29 @@ def get_status(job_id: str):
 @audit_bp.get("/result/<job_id>")
 def get_result(job_id: str):
     job = _jobs.get(job_id)
+
     if job is None:
         try:
             fb_job = fb.get_audit(job_id)
             if fb_job:
-                _jobs[job_id] = fb_job
-                job = fb_job
+                return jsonify(fb_job)
         except Exception:
             pass
-    if job is None:
+
         return jsonify({"error": "Job not found"}), 404
+
     if job["status"] != "done":
         return jsonify({"job_id": job_id, "status": job["status"]}), 202
+
+    # return only safe data
     result = {k: v for k, v in job.items() if not k.startswith("_")}
     return jsonify(result)
 
 
 def get_job(job_id: str) -> dict | None:
+    """
+    IMPORTANT:
+    Returns ONLY in-memory job (with ML artifacts)
+    Firebase fallback is NOT used for mitigation
+    """
     return _jobs.get(job_id)
