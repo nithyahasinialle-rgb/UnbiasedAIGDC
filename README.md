@@ -18,7 +18,7 @@ The demo allows you to:
 - View explanations  
 - Apply mitigation techniques  
 
-**Note:** For smooth performance on the hosted version, datasets of up to ~2000 rows are recommended.
+**Note:** For smooth performance on the hosted version, datasets of up to ~2000 rows are recommended. (Threshold Optimization in Mitigation)
 
 ---
 
@@ -125,13 +125,13 @@ The project supports two mitigation approaches:
 
 ## Tech Stack
 
-**Frontend**
+**Frontend** (Used Firebase for Hosting)
 - React (Vite)  
 - Tailwind CSS  
 - Recharts  
 - Framer Motion  
 
-**Backend**
+**Backend** (Used Railway for Deployment)
 - Flask (Python)  
 - Scikit-learn  
 - Fairlearn  
