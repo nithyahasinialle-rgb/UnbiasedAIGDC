@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const BASE_URL = 'https://unbiasedai-production.up.railway.app/api'
+const BASE_URL = 'unbiasedaigdc-production.up.railway.app/api'
 
 const api = axios.create({
   baseURL: BASE_URL,
