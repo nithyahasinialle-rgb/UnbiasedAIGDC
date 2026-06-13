@@ -20,7 +20,7 @@ def generate_report(metrics_payload: dict) -> str:
         import google.generativeai as genai
 
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-flash-latest")
 
         prompt = _build_prompt(metrics_payload)
         response = model.generate_content(prompt)
@@ -123,7 +123,7 @@ def generate_advisor_guidance(metrics_payload: dict) -> str:
         import google.generativeai as genai
 
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-flash-latest")
 
         prompt = _build_advisor_prompt(metrics_payload)
         response = model.generate_content(prompt)
@@ -255,7 +255,7 @@ def run_chat_session(message: str, history: list, job_context: dict = None) -> s
             system_instruction += f"\n- Disparate Impact Ratio (Parity Ratio): {dp_ratio:.4f}"
             system_instruction += f"\n- Recommended Best Balanced Model: {best_model}"
 
-        model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=system_instruction)
+        model = genai.GenerativeModel("gemini-flash-latest", system_instruction=system_instruction)
 
         # Convert history format to Google's format: [{ 'role': 'user'/'model', 'parts': [text] }]
         formatted_history = []
