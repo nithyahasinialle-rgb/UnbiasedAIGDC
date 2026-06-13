@@ -23,6 +23,7 @@ def mitigate():
     body = request.get_json(force=True) or {}
     job_id = body.get("job_id")
     method = body.get("method", "exponentiated_gradient")
+    model_name = body.get("model")
 
     if not job_id:
         return jsonify({"error": "job_id is required"}), 400
@@ -33,8 +34,16 @@ def mitigate():
     if job["status"] != "done":
         return jsonify({"error": f"Job is not done yet (status: {job['status']})"}), 409
 
-    # Retrieve stored ML artifacts
-    pipeline = job.get("_pipeline")
+    # Retrieve stored ML artifacts based on recommended model or selection
+    recommended = job.get("recommended_model", {})
+    if not model_name:
+        model_name = recommended.get("best_balanced") or "logistic_regression"
+
+    pipelines = job.get("_pipelines", {})
+    pipeline = pipelines.get(model_name)
+    if pipeline is None:
+        pipeline = job.get("_pipeline")
+
     X_train = job.get("_X_train")
     y_train = job.get("_y_train")
     s_train = job.get("_s_train")
@@ -45,27 +54,49 @@ def mitigate():
     if pipeline is None:
         return jsonify({"error": "ML artifacts not found. Re-run the audit."}), 409
 
-    # Before metrics (already computed)
+    # Before metrics (already computed) for the specific model
+    models = job.get("models", {})
+    model_metrics = models.get(model_name, {})
+    if not model_metrics:
+        model_metrics = job
+
     before = {
-        "accuracy": job.get("accuracy"),
-        "demographic_parity_difference": job.get("demographic_parity_difference"),
-        "demographic_parity_ratio": job.get("demographic_parity_ratio"),
-        "equalized_odds_difference": job.get("equalized_odds_difference"),
-        "group_metrics": job.get("group_metrics", {}),
-        "selection_rates": job.get("selection_rates", []),
-        "bias_verdict": job.get("bias_verdict"),
+        "accuracy": model_metrics.get("accuracy"),
+        "demographic_parity_difference": model_metrics.get("demographic_parity_difference"),
+        "demographic_parity_ratio": model_metrics.get("demographic_parity_ratio"),
+        "equalized_odds_difference": model_metrics.get("equalized_odds_difference"),
+        "group_metrics": model_metrics.get("group_metrics", {}),
+        "selection_rates": model_metrics.get("selection_rates", []),
+        "bias_verdict": model_metrics.get("bias_verdict"),
     }
 
     try:
-        after = apply_mitigation(
+        after, mitigated_pipeline = apply_mitigation(
             pipeline, X_train, y_train, s_train, X_test, y_test, s_test, method
         )
+        
+        # Save in memory
+        if "_mitigated_pipelines" not in job:
+            job["_mitigated_pipelines"] = {}
+        mit_key = f"mitigated_{model_name}_{method}"
+        job["_mitigated_pipelines"][mit_key] = mitigated_pipeline
+        
+        # Save to Firebase Storage
+        import pickle
+        import firebase_client as fb
+        try:
+            pipe_bytes = pickle.dumps(mitigated_pipeline)
+            fb.upload_model_artifact(job_id, mit_key, pipe_bytes)
+        except Exception as e:
+            logger.error(f"Error saving mitigated model artifact for job {job_id}: {e}")
+            
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
     return jsonify({
         "job_id": job_id,
         "method": method,
+        "model_mitigated": model_name,
         "before": before,
         "after": after,
     })

@@ -1,6 +1,6 @@
 import React from 'react'
 
-export default function ComparisonTable({ before, after, method }) {
+export default function ComparisonTable({ before, after, method, modelMitigated }) {
   if (!before || !after) return null
 
   const metrics = [
@@ -19,8 +19,15 @@ export default function ComparisonTable({ before, after, method }) {
 
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <p className="t-label">Mitigation Impact</p>
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <p className="t-label" style={{ margin: 0 }}>Mitigation Impact</p>
+          {modelMitigated && (
+            <span className="badge badge-neutral" style={{ fontSize: '10px' }}>
+              Model: {modelMitigated.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+            </span>
+          )}
+        </div>
         <span className="badge badge-info">{methodLabel}</span>
       </div>
       <table className="data-table">

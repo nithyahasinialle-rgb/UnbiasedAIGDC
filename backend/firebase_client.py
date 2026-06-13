@@ -87,3 +87,59 @@ def upload_csv(file_id: str, file_bytes: bytes, filename: str):
     blob.upload_from_string(file_bytes, content_type="text/csv")
     blob.make_public()
     return blob.public_url
+
+
+def associate_user_to_audit(job_id: str, user_id: str):
+    _init()
+    if _db is None:
+        return
+    try:
+        doc_ref = _db.collection("audits").document(job_id)
+        doc_ref.set({"user_id": user_id}, merge=True)
+        logger.info(f"Associated job {job_id} with user {user_id}")
+    except Exception as e:
+        logger.error(f"Error associating user to audit {job_id}: {e}")
+
+
+def get_user_audits(user_id: str) -> list:
+    _init()
+    if _db is None:
+        return []
+    try:
+        docs = _db.collection("audits").where("user_id", "==", user_id).stream()
+        audits = []
+        for doc in docs:
+            audits.append(doc.to_dict())
+        # Sort in memory by timestamp descending
+        audits.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        return audits
+    except Exception as e:
+        logger.error(f"Error getting audits for user {user_id}: {e}")
+        return []
+
+
+def upload_model_artifact(job_id: str, model_name: str, pipeline_bytes: bytes) -> str | None:
+    _init()
+    if _bucket is None:
+        return None
+    try:
+        blob = _bucket.blob(f"models/{job_id}/{model_name}.pkl")
+        blob.upload_from_string(pipeline_bytes, content_type="application/octet-stream")
+        return blob.name
+    except Exception as e:
+        logger.error(f"Error uploading model artifact {model_name} for job {job_id}: {e}")
+        return None
+
+
+def get_model_artifact(job_id: str, model_name: str) -> bytes | None:
+    _init()
+    if _bucket is None:
+        return None
+    try:
+        blob = _bucket.blob(f"models/{job_id}/{model_name}.pkl")
+        if blob.exists():
+            return blob.download_as_bytes()
+        return None
+    except Exception as e:
+        logger.error(f"Error downloading model artifact {model_name} for job {job_id}: {e}")
+        return None

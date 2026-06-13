@@ -35,18 +35,32 @@ def compute_shap_explanation(pipeline, X_test: pd.DataFrame, protected_attr: str
 
         feature_names = _get_feature_names(preprocessor, X_sample)
 
-        # Use LinearExplainer (fastest for logistic regression)
-        explainer = shap.LinearExplainer(
-            classifier,
-            X_transformed,
-            feature_perturbation="interventional"
-        )
-
-        shap_values = explainer.shap_values(X_transformed)
+        clf_name = classifier.__class__.__name__
+        if "LogisticRegression" in clf_name:
+            explainer = shap.LinearExplainer(
+                classifier,
+                X_transformed,
+                feature_perturbation="interventional"
+            )
+            shap_values = explainer.shap_values(X_transformed)
+        elif "RandomForest" in clf_name or "XGB" in clf_name:
+            explainer = shap.TreeExplainer(classifier)
+            shap_values = explainer.shap_values(X_transformed)
+        else:
+            explainer = shap.Explainer(classifier, X_transformed)
+            shap_values = explainer.shap_values(X_transformed)
 
         # 🔥 Handle binary/multiclass outputs safely
         if isinstance(shap_values, list):
-            shap_values = shap_values[0]
+            if len(shap_values) == 2:
+                shap_values = shap_values[1]
+            else:
+                shap_values = shap_values[0]
+        elif isinstance(shap_values, np.ndarray) and len(shap_values.shape) == 3:
+            if shap_values.shape[2] == 2:
+                shap_values = shap_values[:, :, 1]
+            else:
+                shap_values = shap_values[:, :, 0]
 
         mean_abs_shap = np.abs(shap_values).mean(axis=0)
 

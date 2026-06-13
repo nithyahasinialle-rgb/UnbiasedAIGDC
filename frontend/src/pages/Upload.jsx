@@ -1,9 +1,10 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react'
+import React, { useState, useCallback, useRef, useEffect, useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import UploadZone from '../components/UploadZone'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { uploadCSV, startAudit, pollStatus, wakeUpBackend } from '../api/client'
+import { AuthContext } from '../AuthContext'
 
 const Step = ({ n, label, active, done }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -88,6 +89,8 @@ export default function Upload() {
     }
   }, [])
 
+  const { user, login } = useContext(AuthContext)
+
   const handleStartAudit = async () => {
     if (!targetCol || !protectedAttr) return
     setError('')
@@ -95,7 +98,11 @@ export default function Upload() {
     setStatusMsg('Starting audit...')
 
     try {
-      const res = await startAudit(fileId, targetCol, protectedAttr)
+      let token = null
+      if (user) {
+        token = await user.getIdToken()
+      }
+      const res = await startAudit(fileId, targetCol, protectedAttr, file?.name || 'dataset.csv', token)
       pollForResult(res.data.job_id)
     } catch (err) {
       setError(extractError(err))
@@ -186,12 +193,24 @@ export default function Upload() {
         )}
 
         {phase === 'configuring' && (
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="card">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28, padding: '10px 14px', background: 'var(--success-dim)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 7 }}>
-              <span style={{ color: 'var(--success)' }}>✓</span>
-              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--success)' }}>{file?.name}</span>
-              <span className="t-sm" style={{ marginLeft: 'auto' }}>{columns.length} columns</span>
-            </div>
+          <div style={{ display: 'grid', gap: 16 }}>
+            {!user && (
+              <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="card" style={{ background: 'var(--primary-dim)', borderColor: 'rgba(37,99,235,0.25)', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', gap: 12 }}>
+                <span className="t-body" style={{ fontSize: 12, color: 'var(--text-primary)' }}>
+                  <strong>Optional:</strong> Sign in to save your audit history and download trained models.
+                </span>
+                <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 11 }} onClick={login}>
+                  Sign In
+                </button>
+              </motion.div>
+            )}
+
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="card">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28, padding: '10px 14px', background: 'var(--success-dim)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 7 }}>
+                <span style={{ color: 'var(--success)' }}>✓</span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--success)' }}>{file?.name}</span>
+                <span className="t-sm" style={{ marginLeft: 'auto' }}>{columns.length} columns</span>
+              </div>
 
             <div style={{ display: 'grid', gap: 20 }}>
               <div>
@@ -223,7 +242,8 @@ export default function Upload() {
             >
               Run Fairness Audit
             </button>
-          </motion.div>
+            </motion.div>
+          </div>
         )}
 
         {phase === 'auditing' && (

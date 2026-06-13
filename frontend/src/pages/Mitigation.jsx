@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import ComparisonTable from '../components/ComparisonTable'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { applyMitigation } from '../api/client'
+import { applyMitigation, getDownloadModelUrl } from '../api/client'
 
 const METHODS = [
   {
@@ -92,7 +92,7 @@ export default function Mitigation() {
 
         {phase === 'done' && result && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <ComparisonTable before={result.before} after={result.after} method={result.method} />
+            <ComparisonTable before={result.before} after={result.after} method={result.method} modelMitigated={result.model_mitigated} />
 
             {/* Summary */}
             {result.after && result.before && (() => {
@@ -112,8 +112,16 @@ export default function Mitigation() {
               )
             })()}
 
-            <div style={{ display: 'flex', gap: 10 }}>
-              <Link to={`/report/${jobId}`} className="btn btn-primary btn-lg">Generate Report</Link>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <a 
+                href={getDownloadModelUrl(jobId, `mitigated_${result.model_mitigated}_${result.method}`)} 
+                download
+                className="btn btn-primary btn-lg"
+                style={{ background: 'var(--success)', borderColor: 'var(--success)', color: 'white' }}
+              >
+                Download Optimised Model
+              </a>
+              <Link to={`/report/${jobId}`} className="btn btn-secondary btn-lg">Generate Report</Link>
               <button className="btn btn-secondary" onClick={() => { setPhase('idle'); setResult(null) }}>Try Another Method</button>
               <Link to={`/results/${jobId}`} className="btn btn-ghost">Back to Results</Link>
             </div>

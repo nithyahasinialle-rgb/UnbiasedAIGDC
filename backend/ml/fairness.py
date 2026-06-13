@@ -13,7 +13,7 @@ from fairlearn.metrics import (
     false_positive_rate,
     false_negative_rate,
 )
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 
 def compute_fairness_metrics(y_test, y_pred, s_test) -> dict:
@@ -25,13 +25,32 @@ def compute_fairness_metrics(y_test, y_pred, s_test) -> dict:
     y_pred = np.array(y_pred)
     s_test = np.array(s_test).astype(str)
 
-    # Overall accuracy
+    # Overall performance metrics
     accuracy = float(accuracy_score(y_test, y_pred))
+    precision = float(precision_score(y_test, y_pred, zero_division=0))
+    recall = float(recall_score(y_test, y_pred, zero_division=0))
+    f1 = float(f1_score(y_test, y_pred, zero_division=0))
 
     # Scalar fairness metrics
     dp_diff = float(demographic_parity_difference(y_test, y_pred, sensitive_features=s_test))
     dp_ratio = float(demographic_parity_ratio(y_test, y_pred, sensitive_features=s_test))
     eo_diff = float(equalized_odds_difference(y_test, y_pred, sensitive_features=s_test))
+
+    # Equal Opportunity Difference (Recall difference between protected groups)
+    try:
+        eo_frame = MetricFrame(
+            metrics=recall_score,
+            y_true=y_test,
+            y_pred=y_pred,
+            sensitive_features=s_test
+        )
+        recalls = eo_frame.by_group
+        if len(recalls) <= 1:
+            eo_opp_diff = 0.0
+        else:
+            eo_opp_diff = float(recalls.max() - recalls.min())
+    except Exception:
+        eo_opp_diff = 0.0
 
     # Per-group metrics
     metric_frame = MetricFrame(
@@ -64,9 +83,13 @@ def compute_fairness_metrics(y_test, y_pred, s_test) -> dict:
 
     return {
         "accuracy": accuracy,
+        "precision": precision,
+        "recall": recall,
+        "f1_score": f1,
         "demographic_parity_difference": dp_diff,
         "demographic_parity_ratio": dp_ratio,
         "equalized_odds_difference": eo_diff,
+        "equal_opportunity_difference": eo_opp_diff,
         "group_metrics": group_metrics,
         "selection_rates": selection_rates,
         "bias_verdict": _bias_verdict(dp_diff),

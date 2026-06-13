@@ -38,7 +38,9 @@ def apply_mitigation(
         y_train_arr = np.array(y_train)
         y_test_arr = np.array(y_test)
 
-        base_classifier = LogisticRegression(max_iter=1000, random_state=42)
+        from sklearn.base import clone
+        classifier = pipeline.named_steps["classifier"]
+        base_classifier = clone(classifier)
 
         if method == "threshold_optimizer":
             from fairlearn.postprocessing import ThresholdOptimizer
@@ -75,7 +77,14 @@ def apply_mitigation(
         # Compute post-mitigation fairness metrics
         mit_metrics = compute_fairness_metrics(y_test_arr, y_pred_mit, s_test_arr)
         mit_metrics["method"] = method
-        return mit_metrics
+
+        from sklearn.pipeline import Pipeline
+        mitigated_pipeline = Pipeline(steps=[
+            ("preprocessor", preprocessor),
+            ("classifier", mitigator)
+        ])
+
+        return mit_metrics, mitigated_pipeline
 
     except Exception as exc:
         import traceback

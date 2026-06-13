@@ -12,3 +12,4 @@ firebase-admin==6.5.0
 google-generativeai==0.7.2
 python-dotenv==1.0.1
 Werkzeug==3.0.3
+xgboost==2.0.3

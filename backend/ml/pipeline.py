@@ -35,8 +35,8 @@ def get_column_info(df: pd.DataFrame) -> dict:
     return {"columns": cols, "n_rows": len(df), "n_cols": len(df.columns)}
 
 
-def build_pipeline(X_train: pd.DataFrame) -> Pipeline:
-    """Build a sklearn preprocessing + logistic regression pipeline."""
+def build_pipeline(X_train: pd.DataFrame, model_type: str = "logistic_regression") -> Pipeline:
+    """Build a sklearn preprocessing + classifier pipeline."""
     numeric_cols = X_train.select_dtypes(include=["number"]).columns.tolist()
     cat_cols = X_train.select_dtypes(exclude=["number"]).columns.tolist()
 
@@ -63,17 +63,38 @@ def build_pipeline(X_train: pd.DataFrame) -> Pipeline:
 
     preprocessor = ColumnTransformer(transformers=transformers)
 
-    pipeline = Pipeline([
-        ("preprocessor", preprocessor),
-        ("classifier", LogisticRegression(
+    if model_type == "logistic_regression":
+        classifier = LogisticRegression(
             max_iter=300,
             random_state=42,
             solver="saga",
             n_jobs=1,
-        )),
+        )
+    elif model_type == "random_forest":
+        from sklearn.ensemble import RandomForestClassifier
+        classifier = RandomForestClassifier(
+            n_estimators=100,
+            random_state=42,
+            n_jobs=1,
+        )
+    elif model_type == "xgboost":
+        from xgboost import XGBClassifier
+        classifier = XGBClassifier(
+            n_estimators=100,
+            random_state=42,
+            n_jobs=1,
+            eval_metric="logloss",
+        )
+    else:
+        raise ValueError(f"Unknown model type: {model_type}")
+
+    pipeline = Pipeline([
+        ("preprocessor", preprocessor),
+        ("classifier", classifier),
     ])
 
     return pipeline
+
 
 
 def prepare_data(df: pd.DataFrame, target_col: str, protected_attr: str):
@@ -113,8 +134,8 @@ def prepare_data(df: pd.DataFrame, target_col: str, protected_attr: str):
 
 def train_and_evaluate(df: pd.DataFrame, target_col: str, protected_attr: str) -> dict:
     """
-    Full training and evaluation pipeline.
-    Returns model + evaluation artifacts.
+    Full training and evaluation pipeline for multiple models.
+    Returns comparison metrics and model artifacts.
     """
 
     # 🔥 HARD LIMIT dataset size (prevents SIGKILL)
@@ -125,26 +146,93 @@ def train_and_evaluate(df: pd.DataFrame, target_col: str, protected_attr: str) -
         df, target_col, protected_attr
     )
 
-    pipeline = build_pipeline(X_train)
+    models_list = ["logistic_regression", "random_forest", "xgboost"]
+    pipelines = {}
+    eval_results = {}
 
-    pipeline.fit(X_train, y_train)
+    from ml.fairness import compute_fairness_metrics
+    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
-    y_pred = pipeline.predict(X_test)
-    accuracy = float(accuracy_score(y_test, y_pred))
+    for model_name in models_list:
+        try:
+            pipeline = build_pipeline(X_train, model_name)
+            pipeline.fit(X_train, y_train)
+
+            y_pred = pipeline.predict(X_test)
+
+            # Performance metrics
+            acc = float(accuracy_score(y_test, y_pred))
+            prec = float(precision_score(y_test, y_pred, zero_division=0))
+            rec = float(recall_score(y_test, y_pred, zero_division=0))
+            f1 = float(f1_score(y_test, y_pred, zero_division=0))
+
+            # Fairness metrics
+            fairness = compute_fairness_metrics(y_test, y_pred, s_test)
+
+            pipelines[model_name] = pipeline
+            eval_results[model_name] = {
+                "accuracy": acc,
+                "precision": prec,
+                "recall": rec,
+                "f1_score": f1,
+                **fairness
+            }
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to train model {model_name}: {e}", exc_info=True)
 
     # 🔥 Free memory (small but useful)
     gc.collect()
 
+    if "logistic_regression" not in pipelines:
+        raise Exception("Baseline Logistic Regression failed to train.")
+
+    # Determine recommended models
+    # Best Accuracy
+    best_acc_model = max(eval_results.keys(), key=lambda k: eval_results[k]["accuracy"])
+
+    # Fairest model: lowest demographic parity difference absolute value
+    fairest_model = min(eval_results.keys(), key=lambda k: abs(eval_results[k]["demographic_parity_difference"]))
+
+    # Best Balanced model: highest score = (Accuracy + (1 - |demographic_parity_difference|)) / 2
+    def balanced_score(k):
+        acc = eval_results[k]["accuracy"]
+        dp_diff = abs(eval_results[k]["demographic_parity_difference"])
+        return (acc + (1.0 - dp_diff)) / 2.0
+    best_balanced_model = max(eval_results.keys(), key=balanced_score)
+
+    recommendation = {
+        "best_accuracy": best_acc_model,
+        "fairest": fairest_model,
+        "best_balanced": best_balanced_model,
+        "logic": "Best Accuracy model achieved the highest overall accuracy score. Fairest model has the demographic parity difference closest to 0. Best Balanced model maximizes the balance between performance and group fairness: (Accuracy + (1 - |Demographic Parity Difference|)) / 2."
+    }
+
+    # Baseline model for backward compatibility
+    lr_res = eval_results["logistic_regression"]
+
     return {
-        "pipeline": pipeline,
+        "pipelines": pipelines,
+        "eval_results": eval_results,
+        "recommended_model": recommendation,
+
+        # Top-level keys for backward compatibility (LR)
+        "pipeline": pipelines["logistic_regression"],
         "X_train": X_train,
         "X_test": X_test,
         "y_train": y_train,
         "y_test": y_test,
-        "y_pred": y_pred,
+        "y_pred": pipelines["logistic_regression"].predict(X_test),
         "s_train": s_train,
         "s_test": s_test,
-        "accuracy": accuracy,
+        "accuracy": lr_res["accuracy"],
+        "demographic_parity_difference": lr_res["demographic_parity_difference"],
+        "demographic_parity_ratio": lr_res["demographic_parity_ratio"],
+        "equalized_odds_difference": lr_res["equalized_odds_difference"],
+        "equal_opportunity_difference": lr_res.get("equal_opportunity_difference", 0.0),
+        "group_metrics": lr_res["group_metrics"],
+        "selection_rates": lr_res["selection_rates"],
+        "bias_verdict": lr_res["bias_verdict"],
         "target_col": target_col,
         "protected_attr": protected_attr,
     }
