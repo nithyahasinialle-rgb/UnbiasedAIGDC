@@ -71,9 +71,16 @@ def get_advisor():
 
     job = get_job(job_id)
     if job is None:
+        import firebase_client as fb
+        try:
+            job = fb.get_audit(job_id)
+        except Exception:
+            pass
+
+    if job is None:
         return jsonify({"error": "Job not found. Run /api/audit first."}), 404
-    if job["status"] != "done":
-        return jsonify({"error": f"Audit not complete (status: {job['status']})"}), 409
+    if job.get("status") != "done":
+        return jsonify({"error": f"Audit not complete (status: {job.get('status')})"}), 409
 
     metrics_payload = {
         "target_col": job.get("target_col"),
@@ -113,6 +120,12 @@ def chat():
     job_context = None
     if job_id:
         job = get_job(job_id)
+        if job is None:
+            import firebase_client as fb
+            try:
+                job = fb.get_audit(job_id)
+            except Exception:
+                pass
         if job:
             job_context = {
                 "target_col": job.get("target_col"),
