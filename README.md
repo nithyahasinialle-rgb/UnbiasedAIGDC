@@ -1,4 +1,4 @@
-# Unbiased – AI Fairness & Governance Platform
+# Unbiased - AI Fairness & Governance Platform
 
 Unbiased is an AI Fairness and Governance Platform designed to help developers, researchers, students, and organizations identify, understand, and mitigate bias in machine learning systems.
 
