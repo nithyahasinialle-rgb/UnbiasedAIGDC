@@ -2,12 +2,12 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "solutionchallenge-27bf1.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "solutionchallenge-27bf1",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "solutionchallenge-27bf1.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || ""
+  apiKey: "AIzaSyA4DneN4ZlbSi9Nw0YpSeK86L3rPjCbS8E",
+  authDomain: "solutionchallenge-27bf1.firebaseapp.com",
+  projectId: "solutionchallenge-27bf1",
+  storageBucket: "solutionchallenge-27bf1.firebasestorage.app",
+  messagingSenderId: "102708874138",
+  appId: "1:102708874138:web:562f5d26a3a8746b0d0823"
 };
 
 let app;
