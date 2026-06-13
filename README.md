@@ -1,209 +1,517 @@
-# Unbiased – AI Decision Audit Tool
+# Unbiased – AI Fairness & Governance Platform
 
-Unbiased is a platform that helps identify and reduce bias in machine learning models. It allows users to upload a dataset, train a model, check if the model treats different groups fairly, understand why decisions are made, and apply methods to improve fairness.
+Unbiased is an AI Fairness and Governance Platform designed to help developers, researchers, students, and organizations identify, understand, and mitigate bias in machine learning systems.
 
-The aim of this project is simple: **make fairness in AI understandable and actionable, not just theoretical.**
+The platform enables users to upload datasets, evaluate fairness, understand model behavior through explainability techniques, apply bias mitigation strategies, and generate actionable audit reports.
+
+Our goal is simple:
+
+**Make responsible AI development practical, understandable, and accessible.**
 
 ---
 
-## Live Demo
-
-You can try the application here:
+# Live Demo
 
 🔗 https://solutionchallenge-27bf1.web.app/
 
-The demo allows you to:
-- Upload a dataset  
-- Run a fairness audit  
-- View explanations  
-- Apply mitigation techniques  
+The platform currently supports:
 
-**Note:** For smooth performance on the hosted version, datasets of up to ~2000 rows are recommended. (Threshold Optimization in Mitigation)
+* Dataset Upload
+* Fairness Auditing
+* Explainability Analysis
+* Bias Mitigation
+* Audit Reporting
 
----
-
-## Why This Project?
-
-Machine learning models are widely used in decisions like hiring, lending, and risk assessment. However, these models can unintentionally learn biases from data.
-
-Common problems include:
-- Certain groups receiving unfair outcomes  
-- Lack of transparency in how decisions are made  
-- Difficulty in correcting biased predictions  
-
-Unbiased was built to address these issues in a single, easy-to-use system.
+**Note:** For optimal performance on the hosted version, datasets of up to approximately 2000 rows are recommended, especially when using mitigation techniques such as Threshold Optimization.
 
 ---
 
-## Design Approach
+# Problem Statement
 
-This project follows a user-centered design process:
+Machine learning systems increasingly influence decisions in:
 
-### Empathize  
-Many existing fairness tools are either too technical or fragmented. Developers often rely on multiple tools, while others struggle to interpret results.
+* Hiring and Recruitment
+* Lending and Credit Assessment
+* Healthcare
+* Insurance
+* Education
+* Risk Assessment
 
-### Define  
-The problem was framed as:  
-**How can bias in machine learning be detected, explained, and improved in a simple and practical way?**
+While these systems improve efficiency, they can unintentionally learn and amplify biases present in historical data.
 
-### Ideate  
-Different approaches were explored, and the final system integrates fairness evaluation, explainability, and mitigation into one workflow.
+Common challenges include:
 
-### Prototype  
-A working system was built using:
-- Flask backend for ML processing  
-- React frontend for interaction  
+* Unfair outcomes for specific demographic groups
+* Lack of transparency in model decisions
+* Difficulty identifying sources of bias
+* Limited tools for improving fairness without sacrificing performance
+
+Existing solutions often require multiple tools and significant expertise.
+
+Unbiased was created to provide a unified workflow for fairness evaluation, explainability, mitigation, and reporting.
+
+---
+
+# Design Thinking Approach
+
+## Empathize
+
+Many fairness tools are fragmented, highly technical, or difficult to interpret.
+
+Developers often need multiple frameworks to:
+
+* Measure fairness
+* Understand model decisions
+* Apply mitigation techniques
+* Generate reports
+
+Non-technical stakeholders frequently struggle to understand fairness metrics and their implications.
+
+---
+
+## Define
+
+The challenge was defined as:
+
+**How can bias in machine learning systems be detected, explained, mitigated, and communicated through a single intuitive platform?**
+
+---
+
+## Ideate
+
+Multiple approaches were explored before converging on a solution that integrates:
+
+* Fairness Auditing
+* Explainability
+* Mitigation
+* Reporting
+* AI-Assisted Guidance
+
+into a unified workflow.
+
+---
+
+## Prototype
+
+A full-stack platform was developed using:
+
+* React for user interaction
+* Flask for ML processing
+* Fairlearn for fairness evaluation
+* SHAP for explainability
+* Firebase for storage
+* Gemini for intelligent guidance
 
 Workflow:
+
 **Upload → Audit → Explain → Mitigate → Review**
 
-### Test & Iterate  
-The system was tested across datasets and environments. Improvements were made for:
-- Performance  
-- Stability  
-- Clearer output presentation  
+---
+
+## Test & Iterate
+
+The platform has been tested across multiple datasets and deployment environments.
+
+Improvements focused on:
+
+* Performance
+* Reliability
+* Scalability
+* Explainability
+* User Experience
 
 ---
 
-## What the Platform Does
+# Core Features
 
-### 1. Bias Detection  
-Measures fairness across groups using:
-- Demographic Parity Difference and Ratio  
-- Equalized Odds Difference  
-- Group-wise selection rates  
+## 1. Fairness Auditing
 
----
+Evaluate whether machine learning models treat different groups fairly.
 
-### 2. Explainability  
-Shows why the model makes decisions:
-- SHAP-based feature importance  
-- Feature-level insights  
+Metrics include:
 
----
+* Demographic Parity Difference
+* Demographic Parity Ratio
+* Equalized Odds Difference
+* Group Selection Rates
 
-### 3. Bias Mitigation  
-Applies techniques to reduce bias:
-- **Threshold Optimizer** (used in deployed version)  
-- **Exponentiated Gradient** (for local execution)  
+These metrics help identify disparities between protected and non-protected groups.
 
 ---
 
-### 4. Reporting  
-Provides summaries of:
-- Model performance  
-- Fairness metrics  
-- Improvements after mitigation  
+## 2. Explainability
+
+Understanding *why* a model makes decisions is just as important as evaluating fairness.
+
+Unbiased uses SHAP-based explainability to provide:
+
+* Feature Importance Analysis
+* Feature-Level Contributions
+* Model Behavior Insights
+
+This enables users to understand the factors driving predictions.
 
 ---
 
-## Important Note on Mitigation Methods
+## 3. Bias Mitigation
 
-The project supports two mitigation approaches:
+Once bias is identified, the platform provides mitigation strategies to reduce unfair outcomes.
 
-- **Threshold Optimizer**
-  - Fast and lightweight  
-  - Used in the deployed version  
+Supported techniques:
 
-- **Exponentiated Gradient**
-  - More computationally intensive  
-  - Recommended for local execution  
-  - May fail on hosted backend (Railway) due to memory and time limits  
+### Threshold Optimizer
 
----
+* Lightweight
+* Fast
+* Production-friendly
+* Used in deployed version
 
-## How It Works
+### Exponentiated Gradient
 
-1. Upload a dataset  
-2. Train a model  
-3. Evaluate fairness  
-4. Generate explanations  
-5. Apply mitigation  
-6. Review updated results  
+* More computationally intensive
+* Often achieves stronger fairness improvements
+* Recommended for local execution
 
 ---
 
-## Tech Stack
+## 4. Reporting
 
-**Frontend** (Used Firebase for Hosting)
-- React (Vite)  
-- Tailwind CSS  
-- Recharts  
-- Framer Motion  
+Generate audit reports containing:
 
-**Backend** (Used Railway for Deployment)
-- Flask (Python)  
-- Scikit-learn  
-- Fairlearn  
-- SHAP  
+* Performance Metrics
+* Fairness Metrics
+* Explainability Insights
+* Mitigation Results
 
-**AI Integration**
-- Google Gemini API (for report generation)  
-
-**Storage**
-- Firebase Firestore and Storage  
+This supports documentation and transparency requirements.
 
 ---
 
-## Running the Project Locally
+# Round 2 Enhancements
 
-### Requirements
-- Python 3.9+  
-- Node.js 18+  
+To expand beyond basic auditing, the platform is being upgraded into a broader AI Governance solution.
 
 ---
 
-### Setup
-### Backend:
-- cd backend
-- python -m venv venv
-- venv\Scripts\activate
-- pip install -r requirements.txt
-### Create .env file:
-- GEMINI_API_KEY=your_key_here
-- FIREBASE_PROJECT_ID=solutionchallenge-27bf1
-- FIREBASE_STORAGE_BUCKET=solutionchallenge-27bf1.firebasestorage.app
-- FLASK_PORT=5001
+## Multi-Model Fairness Evaluation
 
-### Frontend
-- cd frontend
-- npm install
-### Run the App:
+Instead of relying on a single model, the platform now supports comparative analysis across:
 
-### Backend:
+* Logistic Regression
+* Random Forest
+* XGBoost
 
-python app.py
+Each model is evaluated using:
 
-### Frontend:
+### Performance Metrics
 
-npm run dev
+* Accuracy
+* Precision
+* Recall
+* F1 Score
 
-### Open:
-http://localhost:5173
-### Project Structure
-backend/
-  ├── routes/
-  ├── ml/
-  ├── firebase_client.py
+### Fairness Metrics
 
-frontend/
-  ├── src/components/
-  ├── src/pages/
+* Statistical Parity Difference
+* Disparate Impact
+* Equal Opportunity Difference
 
-## Deployment Notes
-The deployed version is optimized for performance and stability
-Dataset size is limited for smooth execution
-Threshold Optimizer is used in production
-Exponentiated Gradient is recommended for local use
-### License
+This allows users to evaluate fairness-performance trade-offs before deployment.
 
-This project is licensed under the MIT License.
+---
 
-### Final Note
+## Intelligent Model Recommendation
 
-Unbiased focuses on making fairness in machine learning understandable and usable in real-world scenarios. It combines analysis, explanation, and improvement into a single system that is both practical and accessible.
+Choosing the most accurate model is not always the most responsible choice.
 
+The platform automatically identifies:
+
+* Best Accuracy Model
+* Fairest Model
+* Best Balanced Model
+
+Recommendations are generated using transparent evaluation criteria rather than black-box scoring.
+
+---
+
+## Gemini Fairness Advisor
+
+Fairness metrics can be difficult to interpret, particularly for non-technical stakeholders.
+
+Gemini is integrated as an AI Fairness Advisor capable of explaining:
+
+* What bias was detected
+* Which groups are affected
+* Why bias may have occurred
+* Business implications
+* Ethical implications
+* Recommended mitigation strategies
+* Expected trade-offs
+
+The advisor transforms technical outputs into actionable insights.
+
+---
+
+## Audit History
+
+Users can optionally sign in using Google Authentication to save and manage previous audits.
+
+Features include:
+
+* Audit History
+* Report Storage
+* Audit Reopening
+* Result Tracking
+
+Importantly:
+
+**Authentication remains optional.**
+
+Users can continue using all core functionality without creating an account.
+
+---
+
+## Model Export
+
+Trained models can be exported for downstream experimentation and deployment.
+
+Supported exports:
+
+* Logistic Regression
+* Random Forest
+* XGBoost
+
+Export format:
+
+* Pickle (.pkl)
+
+---
+
+## Professional Analytics Dashboard
+
+The upgraded dashboard provides:
+
+* Fairness Summary Cards
+* Bias Severity Indicators
+* Model Comparison Tables
+* Feature Importance Visualizations
+* Recommendation Panels
+* Gemini Advisor Insights
+
+The objective is to present fairness analysis in a way that is understandable to both technical and non-technical audiences.
+
+---
+
+# How It Works
+
+### Step 1
+
+Upload a dataset.
+
+### Step 2
+
+Select:
+
+* Target Column
+* Protected Attribute
+
+### Step 3
+
+Run a fairness audit.
+
+### Step 4
+
+Review:
+
+* Performance Metrics
+* Fairness Metrics
+* Explainability Results
+
+### Step 5
+
+Apply mitigation techniques.
+
+### Step 6
+
+Analyze improvements and generate reports.
+
+---
+
+# System Architecture
+
+## Frontend
+
+Hosted on Firebase Hosting.
+
+Technologies:
+
+* React (Vite)
+* Tailwind CSS
+* Recharts
+* Framer Motion
+
+---
+
+## Backend
+
+Hosted on Railway.
+
+Technologies:
+
+* Flask
+* Scikit-learn
+* Fairlearn
+* SHAP
+* XGBoost
+
+---
+
+## AI Integration
+
+* Google Gemini API
+
+Used for:
+
+* Fairness Explanations
+* Audit Guidance
+* Insight Generation
+
+---
+
+## Storage
+
+Firebase:
+
+* Firestore
+* Storage
+* Authentication
+
+---
+
+# Running Locally
+
+## Requirements
+
+* Python 3.9+
+* Node.js 18+
+
+---
+
+## Backend Setup
 
 ```bash
-git clone <repository-url>
-cd GoogleSolutionChallenge
+cd backend
+
+python -m venv venv
+
+venv\Scripts\activate
+
+pip install -r requirements.txt
+```
+
+Create a `.env` file:
+
+```env
+GEMINI_API_KEY=your_key_here
+FIREBASE_PROJECT_ID=solutionchallenge-27bf1
+FIREBASE_STORAGE_BUCKET=solutionchallenge-27bf1.firebasestorage.app
+FLASK_PORT=5001
+```
+
+Start backend:
+
+```bash
+python app.py
+```
+
+---
+
+## Frontend Setup
+
+```bash
+cd frontend
+
+npm install
+
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+---
+
+# Project Structure
+
+```text
+backend/
+│
+├── routes/
+├── ml/
+├── firebase_client.py
+├── app.py
+│
+frontend/
+│
+├── src/
+│   ├── components/
+│   ├── pages/
+│   ├── api/
+│
+└── public/
+```
+
+---
+
+# Deployment
+
+Frontend:
+
+* Firebase Hosting
+
+Backend:
+
+* Railway
+
+Database & Storage:
+
+* Firebase
+
+The deployed version is optimized for stability and responsiveness while maintaining fairness auditing capabilities.
+
+---
+
+# Future Roadmap
+
+* Advanced Fairness Metrics
+* Continuous Model Monitoring
+* Drift Detection
+* Regulatory Compliance Checks
+* Explainability Benchmarking
+* Enterprise Audit Workflows
+* Responsible AI Governance Toolkit
+
+---
+
+# Vision
+
+The long-term vision of Unbiased is to evolve beyond fairness measurement into a practical AI Governance Platform.
+
+Rather than simply reporting bias, the platform aims to help users:
+
+* Detect Bias
+* Understand Bias
+* Mitigate Bias
+* Document Decisions
+* Build More Responsible AI Systems
+
+By combining fairness auditing, explainability, mitigation, reporting, and AI-assisted guidance into a single workflow, Unbiased lowers the barrier to developing trustworthy machine learning systems.
+
+---
+
+# License
+
+This project is licensed under the MIT License.
