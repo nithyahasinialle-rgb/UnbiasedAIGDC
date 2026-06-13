@@ -143,3 +143,30 @@ def get_model_artifact(job_id: str, model_name: str) -> bytes | None:
     except Exception as e:
         logger.error(f"Error downloading model artifact {model_name} for job {job_id}: {e}")
         return None
+
+
+def upload_job_csv(job_id: str, file_bytes: bytes) -> str | None:
+    _init()
+    if _bucket is None:
+        return None
+    try:
+        blob = _bucket.blob(f"csv/{job_id}/dataset.csv")
+        blob.upload_from_string(file_bytes, content_type="text/csv")
+        return blob.name
+    except Exception as e:
+        logger.error(f"Error uploading job CSV for job {job_id}: {e}")
+        return None
+
+
+def download_job_csv(job_id: str) -> bytes | None:
+    _init()
+    if _bucket is None:
+        return None
+    try:
+        blob = _bucket.blob(f"csv/{job_id}/dataset.csv")
+        if blob.exists():
+            return blob.download_as_bytes()
+        return None
+    except Exception as e:
+        logger.error(f"Error downloading job CSV for job {job_id}: {e}")
+        return None

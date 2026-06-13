@@ -12,7 +12,7 @@ import datetime
 from flask import Blueprint, request, jsonify, send_file
 
 from routes.upload import get_file_bytes
-from ml.pipeline import load_dataframe, train_and_evaluate
+from ml.pipeline import load_dataframe, train_and_evaluate, prepare_data
 from ml.fairness import compute_fairness_metrics
 from ml.explainer import compute_shap_explanation
 import firebase_client as fb
@@ -30,6 +30,13 @@ def _run_audit(job_id: str, file_bytes: bytes, target_col: str, protected_attr: 
 
     try:
         logger.info(f"[{job_id}] Starting audit...")
+
+        # Upload original CSV to Firebase Storage for self-healing/mitigation restore
+        try:
+            fb.upload_job_csv(job_id, file_bytes)
+            logger.info(f"[{job_id}] Uploaded dataset CSV to Firebase Storage.")
+        except Exception as e:
+            logger.error(f"[{job_id}] Failed to upload CSV to Firebase Storage: {e}")
 
         df = load_dataframe(file_bytes)
         logger.info(f"[{job_id}] Loaded dataframe: {df.shape}")
@@ -225,11 +232,76 @@ def get_result(job_id: str):
 
 def get_job(job_id: str) -> dict | None:
     """
-    IMPORTANT:
-    Returns ONLY in-memory job (with ML artifacts)
-    Firebase fallback is NOT used for mitigation
+    Returns in-memory job (with ML artifacts).
+    If not found in memory, attempts a self-healing restore from Firebase.
     """
-    return _jobs.get(job_id)
+    job = _jobs.get(job_id)
+    if job is not None:
+        return job
+
+    # Try to restore from Firebase
+    try:
+        logger.info(f"[{job_id}] Job not found in memory. Attempting self-healing restore...")
+        fb_job = fb.get_audit(job_id)
+        if not fb_job:
+            logger.warning(f"[{job_id}] No audit metadata found in Firestore.")
+            return None
+
+        # Fetch CSV
+        csv_bytes = fb.download_job_csv(job_id)
+        if not csv_bytes:
+            logger.warning(f"[{job_id}] No dataset CSV found in Firebase Storage.")
+            return None
+
+        # Reconstruct the data splits
+        target_col = fb_job.get("target_col")
+        protected_attr = fb_job.get("protected_attr")
+        if not target_col or not protected_attr:
+            logger.warning(f"[{job_id}] target_col or protected_attr missing in metadata.")
+            return None
+
+        df = load_dataframe(csv_bytes)
+        if len(df) > 800:
+            df = df.sample(n=800, random_state=42).reset_index(drop=True)
+
+        X_train, X_test, y_train, y_test, s_train, s_test = prepare_data(
+            df, target_col, protected_attr
+        )
+
+        # Download pipelines
+        pipelines = {}
+        models_list = ["logistic_regression", "random_forest", "xgboost"]
+        import pickle
+        for model_name in models_list:
+            try:
+                pipe_bytes = fb.get_model_artifact(job_id, model_name)
+                if pipe_bytes:
+                    pipelines[model_name] = pickle.loads(pipe_bytes)
+            except Exception as e:
+                logger.error(f"[{job_id}] Failed to download/load pipeline {model_name}: {e}")
+
+        if not pipelines:
+            logger.warning(f"[{job_id}] No base pipelines could be retrieved from Firebase Storage.")
+            return None
+
+        restored_job = {
+            **fb_job,
+            "_pipelines": pipelines,
+            "_pipeline": pipelines.get("logistic_regression"),
+            "_X_train": X_train,
+            "_y_train": y_train,
+            "_s_train": s_train,
+            "_X_test": X_test,
+            "_y_test": y_test,
+            "_s_test": s_test,
+            "_mitigated_pipelines": {},
+        }
+        _jobs[job_id] = restored_job
+        logger.info(f"[{job_id}] Successfully restored job in memory.")
+        return restored_job
+    except Exception as e:
+        logger.error(f"[{job_id}] Exception during self-healing restore: {e}", exc_info=True)
+        return None
 
 
 @audit_bp.get("/download_model/<job_id>")
